@@ -3,8 +3,9 @@ import yaml
 from PIL import Image
 from tqdm import tqdm
 import numpy as np
+import torch
 from torch.utils.data import Dataset, DataLoader
-
+import torchvision.transforms as transforms
 
 class Config:
     """Read yaml config file"""
@@ -31,13 +32,17 @@ class CustomDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, index):
-        sample = self.data[index]
+        image, boxes, labels = self.data[index]
         if self.transform:
             sample = self.transform(sample)
-        image = sample[0]
+        # TODO: Remove
+        totensor = transforms.ToTensor()
+        image = totensor(image)
+        boxes = torch.from_numpy(boxes)
+        labels = torch.from_numpy(labels)
         target = {
-            "boxes": sample[1],
-            "labels": sample[2]
+            "boxes": boxes,
+            "labels": labels
         }
         return image, target
 
@@ -52,6 +57,7 @@ class CustomData:
         if self.config.train:
             train_data = self.read_data(
                 os.path.join(self.config.path, self.config.train))
+            train_data = train_data[:8] # XXX: DEBUG
             self.train_datset = CustomDataset(train_data)
             self.train_loader = DataLoader(
                 self.train_datset, batch_size=batch, shuffle=shuffle,
@@ -60,6 +66,7 @@ class CustomData:
         if self.config.valid:
             valid_data = self.read_data(
                 os.path.join(self.config.path,self.config.valid))
+            valid_data = valid_data[:4] # XXX: DEBUG
             self.valid_datset = CustomDataset(valid_data)
             self.valid_loader = DataLoader(
                 self.valid_datset, num_workers=workers, collate_fn=collate_fn)
@@ -67,6 +74,7 @@ class CustomData:
         if self.config.test:
             test_data = self.read_data(
                 os.path.join(self.config.path,self.config.test))
+            test_data = test_data[:4] # XXX: DEBUG
             self.test_datset = CustomDataset(test_data)
             self.test_loader = DataLoader(self.test_datset, shuffle=False)
 
@@ -77,9 +85,9 @@ class CustomData:
             image = self.read_image(entry.path)
             w, h = image.size  # image.size -> (w, h)
             # XXX: https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html#defining-the-dataset
-            # image = np.array(image) # H x W x C
-
+            
             # # np: H x W x C, torch: C x H x W
+            # image = np.array(image) # H x W x C
             # image = image.transpose((2, 0, 1))
             # image = torch.from_numpy(image)
 
@@ -102,7 +110,7 @@ class CustomData:
                 for x in f.read().strip().splitlines() if len(x)
             ]
 
-        classes = np.array([lb[0] for lb in lbs], dtype=np.uint)
+        classes = np.array([lb[0] for lb in lbs], dtype=np.int16)
         boxes = []
         for lb in lbs:
             x, y, w, h = map(lambda x: float(x), lb[1:])
@@ -127,7 +135,7 @@ class CustomData:
 
             boxes.append([xmin, ymin, xmax, ymax])
 
-        boxes = np.array(boxes, dtype=np.uint)
+        boxes = np.array(boxes, dtype=np.int16)
         return boxes, classes
 
 # utils
