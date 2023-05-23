@@ -57,7 +57,7 @@ class CustomData:
         if self.config.train:
             train_data = self.read_data(
                 os.path.join(self.config.path, self.config.train))
-            train_data = train_data[:8] # XXX: DEBUG
+            train_data = train_data[:16] # XXX: DEBUG
             self.train_datset = CustomDataset(train_data)
             self.train_loader = DataLoader(
                 self.train_datset, batch_size=batch, shuffle=shuffle,
@@ -66,7 +66,7 @@ class CustomData:
         if self.config.valid:
             valid_data = self.read_data(
                 os.path.join(self.config.path,self.config.valid))
-            valid_data = valid_data[:4] # XXX: DEBUG
+            valid_data = valid_data[:16] # XXX: DEBUG
             self.valid_datset = CustomDataset(valid_data)
             self.valid_loader = DataLoader(
                 self.valid_datset, num_workers=workers, collate_fn=collate_fn)
@@ -74,7 +74,7 @@ class CustomData:
         if self.config.test:
             test_data = self.read_data(
                 os.path.join(self.config.path,self.config.test))
-            test_data = test_data[:4] # XXX: DEBUG
+            test_data = test_data[:16] # XXX: DEBUG
             self.test_datset = CustomDataset(test_data)
             self.test_loader = DataLoader(self.test_datset, shuffle=False)
 
@@ -110,7 +110,9 @@ class CustomData:
                 for x in f.read().strip().splitlines() if len(x)
             ]
 
-        classes = np.array([lb[0] for lb in lbs], dtype=np.int16)
+        
+        classes = np.array([lb[0] for lb in lbs], dtype=np.int64)
+        classes = classes + 1 # label 0 for the background
         boxes = []
         for lb in lbs:
             x, y, w, h = map(lambda x: float(x), lb[1:])
@@ -135,7 +137,7 @@ class CustomData:
 
             boxes.append([xmin, ymin, xmax, ymax])
 
-        boxes = np.array(boxes, dtype=np.int16)
+        boxes = np.array(boxes, dtype=np.int64)
         return boxes, classes
 
 # utils

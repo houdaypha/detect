@@ -165,3 +165,6 @@ test/
 t.py
 datasets/
 t.ipynb
+*.ttf
+utils.py
+lightning_logs/

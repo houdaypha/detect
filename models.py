@@ -3,16 +3,14 @@ import torch.nn as nn
 from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2, FasterRCNN_ResNet50_FPN_V2_Weights
 import pytorch_lightning as pl
 from dataset import CustomData
+import pdb
 
 # FasterRCNN Model
 
 class TFasterRCNN(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
-        weights = FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT
-        self.model = fasterrcnn_resnet50_fpn_v2(
-            weights=weights,
-            num_classes=num_classes)
+        self.model = fasterrcnn_resnet50_fpn_v2(num_classes=num_classes)
 
     def forward(self, x):
         return self.model(x)
@@ -32,8 +30,42 @@ class PLFasterRCNN(pl.LightningModule):
         self.model = model
 
     def training_step(self, batch, batch_idx):
-        raise NotImplementedError
-
+        image, targets = batch
+        image, targets = list(image), list(targets) # TODO: collate_fn
+        loss_dict = self.model(image, targets) # 'loss_classifier', 'loss_box_reg', 'loss_objectness', 'loss_rpn_box_reg'
+        loss_sum = sum(loss for loss in loss_dict.values())
+        loss_dict['loss'] = loss_sum
+        self.log('train_loss', loss_sum, logger=False)
+        return loss_dict
+    
+    def training_epoch_end(self, outputs):
+        writer = self.logger.experiment
+        tloss = torch.stack([x["loss"] for x in outputs]).mean()
+        closs = torch.stack([x["loss_classifier"] for x in outputs]).mean()
+        rloss = torch.stack([x["loss_box_reg"] for x in outputs]).mean()
+        rpnloss = torch.stack([x["loss_rpn_box_reg"] for x in outputs]).mean()
+        oloss = torch.stack([x["loss_objectness"] for x in outputs]).mean()
+        writer.add_scalar(
+            'Training/Total Loss',
+            tloss,
+            self.current_epoch)
+        writer.add_scalar(
+            'Training/Classifier Loss',
+            closs,
+            self.current_epoch)
+        writer.add_scalar(
+            'Training/Regressor loss',
+            rloss,
+            self.current_epoch)
+        writer.add_scalar(
+            'Training/Region Proposal Network loss',
+            rpnloss,
+            self.current_epoch)
+        writer.add_scalar(
+            'Training/Objectness loss',
+            oloss,
+            self.current_epoch)
+         
     def configure_optimizers(self):
         optimizer = torch.optim.SGD(
             self.parameters(), lr=0.005, momentum=0.9, weight_decay=0.0005)
@@ -41,7 +73,14 @@ class PLFasterRCNN(pl.LightningModule):
 
 
 class Model:
-    def __init__(self, model: str, num_classes, device='cpu'):
+    r"""
+
+    Args
+        model (str): type of model
+        num_classes (int): including the background
+        device (str | list): model device
+    """
+    def __init__(self, model: str, num_classes: int, device='cpu'):
         self.device = device
         self.num_classes = num_classes
         self.model = model
@@ -87,8 +126,8 @@ class Model:
             # Train pl model
             trainer.fit(
                 model=self.model,
-                train_dataloaders=data.train_dataloader,
-                val_dataloaders=data.val_dataloader)
+                train_dataloaders=data.train_loader,
+                val_dataloaders=data.valid_loader)
 
         elif self.type == 'torch':
             raise NotImplementedError
@@ -100,3 +139,11 @@ class Model:
     
     def load(self, path):
         raise NotImplementedError
+    
+def main():
+    model = Model('fasterrcnn', 2, 'gpu')
+    model.train('./conf/torch.yaml', epochs=100, batch=2, workers=4)
+
+
+if __name__ == '__main__':
+    main()
