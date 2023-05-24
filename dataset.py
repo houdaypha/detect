@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 
+
 class Config:
     """Read yaml config file"""
 
@@ -53,30 +54,34 @@ class CustomData:
         self.batch = batch
         self.shuffle = shuffle
         self.workers = workers
+        self._loaders = []
 
         if self.config.train:
             train_data = self.read_data(
                 os.path.join(self.config.path, self.config.train))
-            train_data = train_data[:16] # XXX: DEBUG
+            # train_data = train_data[:16] # XXX: DEBUG
             self.train_datset = CustomDataset(train_data)
             self.train_loader = DataLoader(
                 self.train_datset, batch_size=batch, shuffle=shuffle,
                 num_workers=workers, collate_fn=collate_fn)
+            self._loaders.append('train_loader')
 
         if self.config.valid:
             valid_data = self.read_data(
-                os.path.join(self.config.path,self.config.valid))
-            valid_data = valid_data[:16] # XXX: DEBUG
+                os.path.join(self.config.path, self.config.valid))
+            # valid_data = valid_data[:16] # XXX: DEBUG
             self.valid_datset = CustomDataset(valid_data)
             self.valid_loader = DataLoader(
                 self.valid_datset, num_workers=workers, collate_fn=collate_fn)
-        
+            self._loaders.append('valid_loader')
+
         if self.config.test:
             test_data = self.read_data(
-                os.path.join(self.config.path,self.config.test))
-            test_data = test_data[:16] # XXX: DEBUG
+                os.path.join(self.config.path, self.config.test))
+            # test_data = test_data[:16] # XXX: DEBUG
             self.test_datset = CustomDataset(test_data)
             self.test_loader = DataLoader(self.test_datset, shuffle=False)
+            self._loaders.append('test_loader')
 
     def read_data(self, path):
         data = []
@@ -84,8 +89,9 @@ class CustomData:
             # Reading image
             image = self.read_image(entry.path)
             w, h = image.size  # image.size -> (w, h)
-            # XXX: https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html#defining-the-dataset
-            
+            # XXX:
+            # https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html#defining-the-dataset
+
             # # np: H x W x C, torch: C x H x W
             # image = np.array(image) # H x W x C
             # image = image.transpose((2, 0, 1))
@@ -110,9 +116,8 @@ class CustomData:
                 for x in f.read().strip().splitlines() if len(x)
             ]
 
-        
         classes = np.array([lb[0] for lb in lbs], dtype=np.int64)
-        classes = classes + 1 # label 0 for the background
+        classes = classes + 1  # label 0 for the background
         boxes = []
         for lb in lbs:
             x, y, w, h = map(lambda x: float(x), lb[1:])
@@ -128,7 +133,6 @@ class CustomData:
             assert xmax >= 0, f'Negative value {xmax}, with label {path}'
             assert ymax >= 0, f'Negative value {ymax}, with label {path}'
 
-
             # Scale to image dimentions
             xmin = int(imgw * xmin)
             ymin = int(imgh * ymin)
@@ -140,7 +144,15 @@ class CustomData:
         boxes = np.array(boxes, dtype=np.int64)
         return boxes, classes
 
+    def __str__(self):
+        data_str = '\n= Dataset information: =\n'
+        for loader in self._loaders:
+            data_loader: DataLoader = getattr(self, loader)
+            data_str += f'- {loader}: {len(data_loader.dataset)}, batches: {len(data_loader)}\n'
+        return data_str
+
 # utils
+
 
 def collate_fn(batch):
     return tuple(zip(*batch))
@@ -182,4 +194,5 @@ def img2label_paths(img_path):
 #     return boxes, classes
 
 if __name__ == '__main__':
-    CustomData('./conf/torch.yaml', 4, False, 1)
+    data = CustomData('./conf/torch.yaml', 4, False, 1)
+    print(data)
