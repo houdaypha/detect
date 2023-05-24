@@ -28,6 +28,7 @@ class PLFasterRCNN(pl.LightningModule):
     def __init__(self, model):
         super().__init__()
         self.model = model
+        self.training_step_outputs = []
 
     def training_step(self, batch, batch_idx):
         image, targets = batch
@@ -36,9 +37,14 @@ class PLFasterRCNN(pl.LightningModule):
         loss_sum = sum(loss for loss in loss_dict.values())
         loss_dict['loss'] = loss_sum
         self.log('train_loss', loss_sum, logger=False)
+        self.training_step_outputs.append(loss_dict)
         return loss_dict
     
-    def training_epoch_end(self, outputs):
+    def on_train_epoch_end(self):
+        # Getting outputs
+        outputs = self.training_step_outputs
+
+        # Logging losses
         writer = self.logger.experiment
         tloss = torch.stack([x["loss"] for x in outputs]).mean()
         closs = torch.stack([x["loss_classifier"] for x in outputs]).mean()
@@ -65,6 +71,9 @@ class PLFasterRCNN(pl.LightningModule):
             'Training/Objectness loss',
             oloss,
             self.current_epoch)
+        
+        # free up the memory
+        self.training_step_outputs.clear()
          
     def configure_optimizers(self):
         optimizer = torch.optim.SGD(
