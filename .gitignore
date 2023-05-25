@@ -167,3 +167,5 @@ datasets/
 t.ipynb
 *.ttf
 lightning_logs/
+runs/
+*.pt

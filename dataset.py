@@ -72,7 +72,8 @@ class CustomData:
             # valid_data = valid_data[:16] # XXX: DEBUG
             self.valid_datset = CustomDataset(valid_data)
             self.valid_loader = DataLoader(
-                self.valid_datset, num_workers=workers, collate_fn=collate_fn)
+                self.valid_datset, batch_size=batch,
+                num_workers=workers, collate_fn=collate_fn)
             self._loaders.append('valid_loader')
 
         if self.config.test:
@@ -80,7 +81,8 @@ class CustomData:
                 os.path.join(self.config.path, self.config.test))
             # test_data = test_data[:16] # XXX: DEBUG
             self.test_datset = CustomDataset(test_data)
-            self.test_loader = DataLoader(self.test_datset, shuffle=False)
+            self.test_loader = DataLoader(
+                self.test_datset, batch_size=batch, shuffle=False)
             self._loaders.append('test_loader')
 
     def read_data(self, path):
