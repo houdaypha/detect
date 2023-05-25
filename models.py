@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.utilities.model_summary import ModelSummary
 from dataset import CustomData
 from collections import OrderedDict
+from ultralytics import YOLO
 import utils
 
 # FasterRCNN Model
@@ -16,6 +17,7 @@ class TFasterRCNN(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
         self.model = fasterrcnn_resnet50_fpn_v2(num_classes=num_classes)
+        self.optimizer = None
 
     def forward(self, x):
         return self.model(x)
@@ -160,34 +162,35 @@ class Model:
     def __init__(self, model: str, num_classes: int, device='cpu'):
         self.device = device
         self.num_classes = num_classes
-        self.model = model
+        self.model = None
+        self._type = None
 
-        if self.model == 'fasterrcnn':
+        if model == 'fasterrcnn':
             if self.device == 'gpu' or isinstance(device, list):
-                self.type = 'pl'
+                self._type = 'pl'
                 tmodel = TFasterRCNN(self.num_classes)
                 self.model = PLFasterRCNN(tmodel.model)
             elif self.device == 'cpu':
-                self.type = 'torch'
+                self._type = 'torch'
                 self.model = TFasterRCNN(self.num_classes)
 
-        elif self.model == 'ssd':
+        elif model == 'ssd':
             if self.device == 'gpu' or isinstance(device, list):
-                self.type = 'pl'
+                self._type = 'pl'
                 raise NotImplementedError
             elif self.device == 'cpu':
-                self.type = 'torch'
+                self._type = 'torch'
                 raise NotImplementedError
 
-        elif self.model == 'yolo':
-            self.type = 'ultralytics'
-            raise NotImplementedError
+        elif model == 'yolo':
+            self._type = 'yolo'
+            self.model = YOLO('yolov8x.yaml')
 
         else:
             raise Exception(f'Model {self.model} not supported')
 
     def train(self, data: str, epochs=10, batch=4, shuffle=True, workers=4):
-        if self.type == 'pl':
+        if self._type == 'pl':
             data: CustomData = CustomData(data, batch, shuffle, workers)
             # Print dataset information
             print(data)
@@ -208,16 +211,34 @@ class Model:
                 train_dataloaders=data.train_loader,
                 val_dataloaders=data.valid_loader)
 
-        elif self.type == 'torch':
+        elif self._type == 'torch':
             raise NotImplementedError
-        elif self.type == 'yolo':
-            raise NotImplementedError
+        elif self._type == 'yolo':
+            self.model.train(
+                data=data, epochs=epochs, device=self.device, batch=batch)
 
     def export(self, path):
-        raise NotImplementedError
+        if self._type == 'pl':
+            pass
+        elif self._type == 'torch':
+            pass
+        elif self._type == 'yolo':
+            pass
+        else:
+            raise Exception(f'Model type {self._type} not supported')
 
     def load(self, path):
-        raise NotImplementedError
+        # TODO: verify file extension
+        if self._type == 'pl':
+            tmodel = self.model.model
+            self.model = PLFasterRCNN.load_from_checkpoint(path, model=tmodel)
+        elif self._type == 'torch':
+            model = torch.load(path, map_location=torch.device('cpu'))
+            self.model.load_state_dict(model['state_dict'])
+        elif self._type == 'yolo':
+            self.model.load(path)
+        else:
+            raise Exception(f'Model type {self._type} not supported')
 
     def predict(self, source):
         """
