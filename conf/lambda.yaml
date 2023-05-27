@@ -7,4 +7,4 @@ test: test/images
 
 # Classes
 names:
-  1: class_1
+  0: class_1

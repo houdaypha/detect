@@ -163,6 +163,7 @@ cython_debug/
 # Special
 test/
 t.py
+*.jpg
 datasets/
 t.ipynb
 *.ttf

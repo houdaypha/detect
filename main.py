@@ -1,7 +1,8 @@
 from models import Model
 
 def main():
-    model = Model('fasterrcnn', 1, 'gpu')
+    print('Running main')
+    model = Model('ssd', 2, 0)
     model.train('./conf/torch.yaml', 2, workers=2)
 
 

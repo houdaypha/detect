@@ -1,3 +1,4 @@
+from typing import Any
 import torch
 import torch.nn as nn
 from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2, FasterRCNN
@@ -5,6 +6,9 @@ import pytorch_lightning as pl
 from pytorch_lightning.utilities.model_summary import ModelSummary
 import utils
 
+
+# TODO:
+# * mAP50, mAP50-95, precision, recall. NOTE: torchmetrics
 
 class TFasterRCNN(nn.Module):
     def __init__(self, num_classes):
@@ -34,6 +38,9 @@ class PLFasterRCNN(pl.LightningModule):
         self.model = model
         self.training_step_outputs = []
         self.validation_step_outputs = []
+
+    def forward(self, x):
+        return self.model(x)
 
     def training_step(self, batch, batch_idx):
         image, targets = batch

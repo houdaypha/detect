@@ -1,8 +1,9 @@
-from PIL import ImageDraw, ImageFont
-from torchvision import transforms
-import torch
-import warnings
+import os
 from collections import OrderedDict
+from PIL import ImageDraw, ImageFont, Image
+import numpy as np
+import torch
+from torchvision import transforms
 from torchvision.models.detection.roi_heads import fastrcnn_loss
 from torchvision.models.detection.rpn import concat_box_prediction_layers
 
@@ -72,13 +73,13 @@ def yolo_draw_predections(image, object_predictions):
     return image
 
 
-def draw_predections(image, boxes, labels, scores, thr):
+def draw_predections(image, boxes, scores, labels, thr):
     # Convert PIL image to ImageDraw object
     image = transforms.ToPILImage()(image)
     draw = ImageDraw.Draw(image)
     width = 3
 
-    for boxe, label, score in zip(boxes, labels, scores):
+    for boxe, score, label in zip(boxes, scores, labels):
         if score > thr:
             # Extract prediction details
             bbox = boxe.cpu().detach().numpy()
@@ -223,3 +224,29 @@ def eval_forward(model, images, targets):
     losses.update(detector_losses)
     losses.update(proposal_losses)
     return losses, detections
+
+
+def read_source(source, model):
+    """
+    Read source, and return an image.
+
+    Args:
+        model (str): Type of model.
+        source (str | PIL | np.ndarray): The source of the image to make predictions on.
+    """
+    if isinstance(source, str):
+        if os.path.isfile(source):
+            source = read_image(source)
+        else:
+            raise Exception(f'File {source} not found')
+
+    if model == 'pl' or model == 'torch':
+        source = transforms.ToTensor()(source) # C, H, W
+        return source
+    else:
+        return source
+
+def read_image(path):
+    with open(path, "rb") as f:
+        img = Image.open(f)  # PIL.Image.Image
+        return img.convert("RGB")
