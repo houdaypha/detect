@@ -2,8 +2,8 @@ import torch
 import pytorch_lightning as pl
 from ultralytics import YOLO
 from dataset import CustomData
-from fasterrcnn import TFasterRCNN, PLFasterRCNN
-from ssd import TSSD, PLSSD
+from models.fasterrcnn import TFasterRCNN, PLFasterRCNN
+from models.ssd import TSSD, PLSSD
 import utils
 
 class Model:
@@ -15,12 +15,28 @@ class Model:
         device (str | list): model device
     """
 
-    def __init__(self, model: str, num_classes=2, device: str|int='cpu'):
-        self._device = device
+    def __init__(self, model: str, num_classes=2, device='cpu'):
         self.num_classes = num_classes
-        self._name = model
         self.model = None
+        self._device = device
+        self._name = model
         self._type = None
+
+        # Device assertions
+        if not (device == 'cpu'):
+            if not torch.cuda.is_available():
+                raise Exception('GPU training on this device is not supported')
+            else:
+                if isinstance(device, int):
+                    if device >= torch.cuda.device_count():
+                        raise Exception(f"Device {device} doesn't exist")
+                elif isinstance(device, list):
+                    for d in device:
+                        if d >= torch.cuda.device_count():
+                            raise Exception(f"Device {device} doesn't exist")
+                else:
+                    raise Exception(f'Device {device} not supported') 
+                    
 
         if model == 'fasterrcnn':
             if self._device == 0 or isinstance(device, list):
@@ -82,29 +98,30 @@ class Model:
                 data=data, epochs=epochs, device=self._device, batch=batch)
 
     def export(self, path):
-        if self._type == 'pl':
-            pass
-        elif self._type == 'torch':
-            pass
-        elif self._type == 'yolo':
-            pass
-        else:
-            raise Exception(f'Model type {self._type} not supported')
+        # if self._type == 'pl':
+        #     pass
+        # elif self._type == 'torch':
+        #     pass
+        # elif self._type == 'yolo':
+        #     pass
+        # else:
+        #     raise Exception(f'Model type {self._type} not supported')
         raise NotImplementedError
 
     def load(self, path):
         # TODO: verify file extension
         if self._type == 'pl':
             tmodel = self.model.model
-
             self.model = PLFasterRCNN.load_from_checkpoint(
-                path, model=tmodel, map_location=torch.device(self._device))
+                path, model=tmodel, map_location=self.device)
         elif self._type == 'torch':
+            # TODO: torch and gpu ?
             model = torch.load(path, map_location=torch.device('cpu'))
             self.model.load_state_dict(model['state_dict'])
         elif self._type == 'yolo':
             # NOTE: Should be fixed
-            self.model = YOLO(path, device = self._device)
+            self.model = YOLO(path)
+            self.model.to(self._device)
         else:
             raise Exception(f'Model type {self._type} not supported')
 
@@ -121,12 +138,14 @@ class Model:
         image = utils.read_source(source, self._type)
         if self._type == 'pl':
             self.model.model.eval() # NOTE: I shouldn't do that
-            print(image.shape)
+            image = image.unsqueeze(0) # TODO: Batch problem
+            image = image.to(self.device)
             results = self.model(image)
+            results = results[0] # Batch problem
             return {
-                'boxes': results['boxes'],
-                'scores': results['scores'],
-                'lables': results['labels']
+                'boxes': results['boxes'].cpu().detach(),
+                'scores': results['scores'].cpu().detach(),
+                'labels': results['labels'].cpu().detach()
             }
         elif self._type == 'torch':
             pass

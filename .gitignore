@@ -170,3 +170,5 @@ t.ipynb
 lightning_logs/
 runs/
 *.pt
+outputs/
+tests/
