@@ -4,7 +4,7 @@ import torch.nn as nn
 from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2, FasterRCNN
 import pytorch_lightning as pl
 from pytorch_lightning.utilities.model_summary import ModelSummary
-import utils
+from .. import utils
 
 
 # TODO:

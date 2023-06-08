@@ -1,10 +1,12 @@
 import torch
 import pytorch_lightning as pl
 from ultralytics import YOLO
-from dataset import CustomData
-from models.fasterrcnn import TFasterRCNN, PLFasterRCNN
-from models.ssd import TSSD, PLSSD
-import utils
+from .dataset import CustomData
+from .models.fasterrcnn import TFasterRCNN, PLFasterRCNN
+from .models.ssd import TSSD, PLSSD
+from .models.retina import TRetina, PLRetina
+from . import utils
+
 
 class Model:
     r"""
@@ -35,8 +37,7 @@ class Model:
                         if d >= torch.cuda.device_count():
                             raise Exception(f"Device {device} doesn't exist")
                 else:
-                    raise Exception(f'Device {device} not supported') 
-                    
+                    raise Exception(f'Device {device} not supported')
 
         if model == 'fasterrcnn':
             if self._device == 0 or isinstance(device, list):
@@ -60,6 +61,18 @@ class Model:
                 self._type = 'torch'
                 self.model = TSSD(self.num_classes)
                 self.model.to(self._device)
+        
+        elif model == 'retina':
+            if self._device == 0 or isinstance(device, list):
+                self._type = 'pl'
+                print("Setting ssd on pytorch lightning")
+                tmodel = TRetina(self.num_classes)
+                self.model = PLRetina(tmodel.model)
+                self.model.to(self._device)
+            elif self._device == 'cpu':
+                self._type = 'torch'
+                self.model = TRetina(self.num_classes)
+                self.model.to(self._device)
 
         elif model == 'yolo':
             self._type = 'yolo'
@@ -69,9 +82,20 @@ class Model:
         else:
             raise Exception(f'Model {self.model} not supported')
 
-    def train(self, data: str, epochs=10, batch=4, shuffle=True, workers=4):
+    def train(
+            self,
+            data: str,
+            epochs=10,
+            batch=4,
+            shuffle=True,
+            workers=4,
+            out_size=None):
         if self._type == 'pl':
-            data: CustomData = CustomData(data, batch, shuffle, workers)
+            if out_size:
+                data: CustomData = CustomData(
+                    data, batch, shuffle, workers, out_size)
+            else:
+                data: CustomData = CustomData(data, batch, shuffle, workers)
             # Print dataset information
             print(data)
 
@@ -112,8 +136,14 @@ class Model:
         # TODO: verify file extension
         if self._type == 'pl':
             tmodel = self.model.model
-            self.model = PLFasterRCNN.load_from_checkpoint(
-                path, model=tmodel, map_location=self.device)
+            if self._name == 'fasterrcnn':
+                self.model = PLFasterRCNN.load_from_checkpoint(
+                    path, model=tmodel, map_location=self.device)
+            elif self._name == 'ssd':
+                self.model = PLSSD.load_from_checkpoint(
+                    path, model=tmodel, map_location=self.device)
+            else:
+                raise Exception(f'Model name {self._name} not supported')
         elif self._type == 'torch':
             # TODO: torch and gpu ?
             model = torch.load(path, map_location=torch.device('cpu'))
@@ -137,11 +167,11 @@ class Model:
         """
         image = utils.read_source(source, self._type)
         if self._type == 'pl':
-            self.model.model.eval() # NOTE: I shouldn't do that
-            image = image.unsqueeze(0) # TODO: Batch problem
+            self.model.model.eval()  # NOTE: I shouldn't do that
+            image = image.unsqueeze(0)  # TODO: Batch problem
             image = image.to(self.device)
             results = self.model(image)
-            results = results[0] # Batch problem
+            results = results[0]  # Batch problem
             return {
                 'boxes': results['boxes'].cpu().detach(),
                 'scores': results['scores'].cpu().detach(),
@@ -153,8 +183,8 @@ class Model:
             results = self.model.predict(source, verbose=False)
             boxes = results[0].boxes
             return {
-                'boxes': boxes.xyxy, 
-                'scores': boxes.conf, 
+                'boxes': boxes.xyxy,
+                'scores': boxes.conf,
                 'labels': boxes.cls
             }
 

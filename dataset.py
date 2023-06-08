@@ -8,6 +8,44 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 
 
+def pair(t):
+    return t if isinstance(t, tuple) else (t, t)
+
+
+class Rescale:
+    def __init__(self, out_size) -> None:
+        self.out_size = pair(out_size)
+
+    def __call__(self, sample):
+        image, boxes, labels = sample
+        w, h = image.size
+        nw, nh = self.out_size
+        ws, hs = nw / w, nh / h  # width scale, height scale
+
+        nimage = image.resize(self.out_size)
+
+        nboxes = []
+        for box in boxes:
+            nboxes.append([int(box[0] * ws), int(box[1] * hs),
+                          int(box[2] * ws), int(box[3] * hs)])
+        nboxes = np.array(nboxes, dtype=np.int64)
+
+        # print(f'Original: {nboxes=}')
+        # print(f'Rescales: {nboxes=}')
+
+        return nimage, nboxes, labels
+
+
+class ToTensor:
+    def __call__(self, sample):
+        image, boxes, labels = sample
+        totensor = transforms.ToTensor()
+        image = totensor(image)
+        boxes = torch.from_numpy(boxes)
+        labels = torch.from_numpy(labels)
+        return image, boxes, labels
+
+
 class Config:
     """Read yaml config file"""
 
@@ -33,14 +71,10 @@ class CustomDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, index):
-        image, boxes, labels = self.data[index]
+        sample = self.data[index]
         if self.transform:
             sample = self.transform(sample)
-        # TODO: Remove
-        totensor = transforms.ToTensor()
-        image = totensor(image)
-        boxes = torch.from_numpy(boxes)
-        labels = torch.from_numpy(labels)
+        image, boxes, labels = sample
         target = {
             "boxes": boxes,
             "labels": labels
@@ -49,18 +83,24 @@ class CustomDataset(Dataset):
 
 
 class CustomData:
-    def __init__(self, path, batch=1, shuffle=False, workers=0):
+    def __init__(self, path, batch=1, shuffle=False, workers=0, out_size=None):
         self.config: Config = Config(path)
         self.batch = batch
         self.shuffle = shuffle
         self.workers = workers
         self._loaders = []
+        self._out_size = out_size
+
+        if out_size:
+            trsfm = transforms.Compose([Rescale(out_size), ToTensor()])
+        else:
+            trsfm = ToTensor()
 
         if self.config.train:
             train_data = self.read_data(
                 os.path.join(self.config.path, self.config.train))
-            # train_data = train_data[:16] # XXX: DEBUG
-            self.train_datset = CustomDataset(train_data)
+            # train_data = train_data[:10]  # XXX: DEBUG
+            self.train_datset = CustomDataset(train_data, trsfm)
             self.train_loader = DataLoader(
                 self.train_datset, batch_size=batch, shuffle=shuffle,
                 num_workers=workers, collate_fn=collate_fn)
@@ -70,7 +110,7 @@ class CustomData:
             valid_data = self.read_data(
                 os.path.join(self.config.path, self.config.valid))
             # valid_data = valid_data[:16] # XXX: DEBUG
-            self.valid_datset = CustomDataset(valid_data)
+            self.valid_datset = CustomDataset(valid_data, trsfm)
             self.valid_loader = DataLoader(
                 self.valid_datset, batch_size=batch,
                 num_workers=workers, collate_fn=collate_fn)
@@ -80,7 +120,7 @@ class CustomData:
             test_data = self.read_data(
                 os.path.join(self.config.path, self.config.test))
             # test_data = test_data[:16] # XXX: DEBUG
-            self.test_datset = CustomDataset(test_data)
+            self.test_datset = CustomDataset(test_data, trsfm)
             self.test_loader = DataLoader(
                 self.test_datset, batch_size=batch, shuffle=False)
             self._loaders.append('test_loader')

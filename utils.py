@@ -52,7 +52,7 @@ def yolo_draw_predections(image, object_predictions):
         color = COLORS[category_id.item()]
 
         # Define the font properties for text overlay
-        font = ImageFont.truetype("Montserrat-Bold.ttf", size=18)
+        font = ImageFont.load_default()
 
         # Draw the bounding box rectangle
         print(f'{score}: {bbox}')
@@ -90,7 +90,7 @@ def draw_predections(image, boxes, scores, labels, thr):
             color = COLORS[category_id.item()]
 
             # Define the font properties for text overlay
-            font = ImageFont.truetype("Montserrat-Bold.ttf", size=18)
+            font = ImageFont.load_default()
 
             # Draw the bounding box rectangle
             draw.rectangle(tuple(bbox), outline=color, width=width)
