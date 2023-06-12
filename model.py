@@ -116,7 +116,7 @@ class Model:
                 val_dataloaders=data.valid_loader)
 
         elif self._type == 'torch':
-            raise NotImplementedError
+            raise NotImplementedError('Training on cpu is not supported yet')
         elif self._type == 'yolo':
             self.model.train(
                 data=data, epochs=epochs, device=self._device, batch=batch)
@@ -146,8 +146,8 @@ class Model:
                 raise Exception(f'Model name {self._name} not supported')
         elif self._type == 'torch':
             # TODO: torch and gpu ?
-            model = torch.load(path, map_location=torch.device('cpu'))
-            self.model.load_state_dict(model['state_dict'])
+            weights = torch.load(path, map_location=torch.device('cpu'))
+            self.model.load_state_dict(weights['state_dict'])
         elif self._type == 'yolo':
             # NOTE: Should be fixed
             self.model = YOLO(path)
@@ -185,7 +185,15 @@ class Model:
                 'labels': results['labels'].cpu().detach()
             }
         elif self._type == 'torch':
-            pass
+            self.model.eval()
+            image = image.unsqueeze(0)  # TODO: Batch problem
+            results = self.model(image)
+            results = results[0]  # Batch problem
+            return {
+                'boxes': results['boxes'].detach().numpy(),
+                'scores': results['scores'].detach().numpy(),
+                'labels': results['labels'].detach().numpy()
+            }
         elif self._type == 'yolo':
             results = self.model.predict(source, verbose=False)
             boxes = results[0].boxes
@@ -219,7 +227,7 @@ class Model:
                 model=self.model, dataloaders=data.test_loader)
             return results[0]
         elif self._type == 'torch':
-            raise NotImplementedError
+            raise NotImplementedError('Testing on cpu is not supported yet')
         elif self._type == 'yolo':
             metrics = self.model.val(
                 data=data, device=self._device, split = 'test')
