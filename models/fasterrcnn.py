@@ -4,6 +4,7 @@ import torch.nn as nn
 from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2, FasterRCNN
 import pytorch_lightning as pl
 from pytorch_lightning.utilities.model_summary import ModelSummary
+from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from .. import utils
 
 
@@ -38,6 +39,7 @@ class PLFasterRCNN(pl.LightningModule):
         self.model = model
         self.training_step_outputs = []
         self.validation_step_outputs = []
+        self.test_map = MeanAveragePrecision()
 
     def forward(self, x):
         return self.model(x)
@@ -139,6 +141,29 @@ class PLFasterRCNN(pl.LightningModule):
 
         # free up the memory
         self.validation_step_outputs.clear()
+
+    def test_step(self, batch, batch_idx):
+        image, targets = batch
+        image, targets = list(image), list(targets)  # TODO: collate_fn
+        predections = self.model(image, targets)
+        return {'preds': predections, 'target': targets}
+    
+    def on_test_batch_end(self, outputs, batch, batch_idx, dataloader_idx = 0):
+        self.test_map.update(outputs['preds'], outputs['target'])
+
+    def on_test_epoch_end(self):
+        epoch_map = self.test_map.compute()
+        print(epoch_map)
+        map_m = epoch_map['map']
+        map_50 = epoch_map['map_50']
+        map_75 = epoch_map['map_75']
+        self.log("test_map", map_m)
+        self.log("test_map_50", map_50)
+        self.log("test_map_75", map_75)
+        self.test_map.reset()
+
+    def on_test_end(self):
+        return super().on_test_end()
 
     def configure_optimizers(self):
         optimizer = torch.optim.SGD(

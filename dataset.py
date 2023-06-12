@@ -122,7 +122,8 @@ class CustomData:
             # test_data = test_data[:16] # XXX: DEBUG
             self.test_datset = CustomDataset(test_data, trsfm)
             self.test_loader = DataLoader(
-                self.test_datset, batch_size=batch, shuffle=False)
+                self.test_datset, batch_size=batch, shuffle=False,
+                num_workers=workers, collate_fn=collate_fn)
             self._loaders.append('test_loader')
 
     def read_data(self, path):

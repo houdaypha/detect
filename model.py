@@ -80,7 +80,7 @@ class Model:
             self.model.to(self._device)
 
         else:
-            raise Exception(f'Model {self.model} not supported')
+            raise Exception(f'Model {model} not supported')
 
     def train(
             self,
@@ -151,6 +151,13 @@ class Model:
         elif self._type == 'yolo':
             # NOTE: Should be fixed
             self.model = YOLO(path)
+
+            # NOTE: Should be fixed
+            self.model.overrides['conf'] = 0.25 # 0.25  # NMS confidence threshold
+            self.model.overrides['iou'] = 0.45 # 0.45  # NMS IoU threshold
+            self.model.overrides['agnostic_nms'] = False  # NMS class-agnostic
+            self.model.overrides['max_det'] = 1000  # maximum number of detections per image
+
             self.model.to(self._device)
         else:
             raise Exception(f'Model type {self._type} not supported')
@@ -196,6 +203,34 @@ class Model:
             verbose (bool): Controls verbosity.
         """
         self.model.info(verbose=verbose)
+
+    def test(self, data, batch=1, workers=4, out_size=None):
+        if self._type == 'pl':
+            if out_size:
+                data: CustomData = CustomData(
+                    data, batch, False, workers, out_size)
+            else:
+                data: CustomData = CustomData(data, batch, False, workers)
+            # Print dataset information
+            print(data)
+
+            trainer = pl.Trainer(accelerator='gpu')
+            results = trainer.test(
+                model=self.model, dataloaders=data.test_loader)
+            return results[0]
+        elif self._type == 'torch':
+            raise NotImplementedError
+        elif self._type == 'yolo':
+            metrics = self.model.val(
+                data=data, device=self._device, split = 'test')
+            results = {
+                'test_map': metrics.box.map,
+                'test_map_50': metrics.box.map50,
+                'test_map_75': metrics.box.map75
+            }
+            return results
+        else:
+            raise Exception(f'Model type {self._type} not supported.')
 
     @property
     def device(self):
